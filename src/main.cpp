@@ -137,23 +137,6 @@ HSTREAM WINAPI StreamCreateProc(BASSFILE file, DWORD flags){
 	if(stream->streamDec == NULL){
 		return 0;
 	}
-/*
-	BYTE buf[RETRY_TIMES*50];
-	int readed;
-	for(int i=0;i<=RETRY_TIMES;i++){
-		// 理由は分からないが、適当にデータにアクセスしてからじゃないとtak_SSD_Validで失敗しがち?。 超ハマりポイント
-		IOIF.Read(stream,buf,i*50,&readed);
-		Sleep(1);
-		IOIF.Seek(stream,0);
-		if (TAK_OpenFile(stream) == 0 ) { // success
-			break;
-		}else{
-			if(i==RETRY_TIMES){ // error rescue
-				TAK_Free(stream);
-				error(BASS_ERROR_FILEFORM);
-			}
-		}
-	}*/
 	if (TAK_OpenFile(stream) != 0 ) {
 		TAK_Free(stream);
 		error(BASS_ERROR_FILEFORM);
