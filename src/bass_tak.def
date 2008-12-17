@@ -1,0 +1,8 @@
+LIBRARY bass_tak
+VERSION 2.3
+EXPORTS
+BASSplugin
+BASS_TAK_StreamCreateFile
+BASS_TAK_StreamCreateURL
+BASS_TAK_StreamCreateFileUser
+
