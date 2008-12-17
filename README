@@ -1,0 +1,10 @@
+Require
+
+src/bass-addon.h
+src/bass.h
+src/bass.lib
+src/tak_deco_lib.h
+src/tak_deco_lib.lib
+
+And
+tak_deco_lib.dll
