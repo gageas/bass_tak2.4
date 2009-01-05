@@ -1,6 +1,17 @@
-#include <windows.h>
 #include "bass_tak.h"
+#include "tak_deco_lib.h"
+#pragma comment(lib,"tak_deco_lib.lib")
+#include "ioif.h"
+#include "ape.h"
 #include "takfunc.h"
+
+// this may cnange.(there's no reason for current value)
+#define BASS_CTYPE_STREAM_TAK	0x12000
+
+/*****************************************************************************************
+BASS_TAG_APE copied from fittle source (BASS2.3?)
+*****************************************************************************************/
+#define BASS_TAG_APE            6
 
 int setID3V24Frame(BYTE* buf,int charcode,const char* frameId,const BYTE* value,int valsize){
 	memcpy(buf,frameId,4);
@@ -88,7 +99,7 @@ void GetID3Tags(TAKSTREAM* stream){
 			memcpy(stream->info.ID3V1 + 93,valueAnsi,min(readedAnsi,4));
 		}else if( strcmp(key,APE_TAG_FIELD_COMMENT) == 0 ){
 			BYTE* t= (BYTE*)HeapAlloc(GetProcessHeap(),0,4+readed);
-			strcpy_s((char*)t,4,"JPN");// J,P,N,(0)
+			strcpy_s((char*)t,4,"ENG");// Not correct for other languages, but I have no idea to detect language.
 			memcpy_s((char*)t+4,readed,value,readed);
 			readed+=4;
 			stream->info.ID3V2 = (BYTE*)HeapReAlloc(GetProcessHeap(),0,stream->info.ID3V2,tagsize+11+readed);
@@ -208,10 +219,12 @@ QWORD WINAPI TAK_SetPosition(void *inst, QWORD pos, DWORD mode)
 }
 
 static void FreeTAK(TAKSTREAM* tak){
-	tak_SSD_Destroy(tak->streamDec);
-	HeapFree(GetProcessHeap(),0,tak->info.APETAG);
-	HeapFree(GetProcessHeap(),0,tak->info.ID3V2);
-	HeapFree(GetProcessHeap(),0,tak);
+	if(tak){
+		tak_SSD_Destroy(tak->streamDec);
+		HeapFree(GetProcessHeap(),0,tak->info.APETAG);
+		HeapFree(GetProcessHeap(),0,tak->info.ID3V2);
+		HeapFree(GetProcessHeap(),0,tak);
+	}
 	return;
 }
 
@@ -220,16 +233,36 @@ void WINAPI TAK_Free(void* inst)
 	FreeTAK((TAKSTREAM*)inst);
 }
 
-int TAK_OpenFile (TAKSTREAM *tak) {
-	Ttak_str_StreamInfo info;
-	int ret;
+// add-on function table
+ADDON_FUNCTIONS TAKfuncs={
+	0, // flags
+	TAK_Free,
+	TAK_GetLength,
+	TAK_GetTags,
+	NULL, // let BASS handle file position
+	TAK_GetInfo,
+	TAK_CanSetPosition,
+	TAK_SetPosition,
+	NULL, // let BASS handle the position/looping/syncing (POS & END)
+	NULL, // TAK_SetSync,
+	NULL, // TAK_RemoveSync,
+	NULL, // let BASS decide when to resume a stalled stream
+	NULL, // no custom flags
+	NULL // no attributes
+};
 
-	if(tak_SSD_Valid(tak->streamDec) != tak_True){
-		return -1;
-	}
-	if((ret = tak_SSD_GetStreamInfo(tak->streamDec,&info)) != tak_res_Ok){
-		return -1;
-	}
+bool TAK_OpenFile (TAKSTREAM *tak) {
+	int ret;
+	Ttak_str_StreamInfo info;
+
+	TtakSSDOptions Options;
+	Options.Cpu = tak_Cpu_Any;
+	Options.Flags = 0;
+
+	if((tak->streamDec = tak_SSD_Create_FromStream(&IOIF,tak,&Options,NULL,tak)) == NULL){ return false; }
+	if(tak_SSD_Valid(tak->streamDec) != tak_True){ return false; }
+	if((ret = tak_SSD_GetStreamInfo(tak->streamDec,&info)) != tak_res_Ok){ return false; }
+
 	tak->info.NCH = info.Audio.ChannelNum;
 	tak->info.BPS = info.Audio.SampleBits;
 	tak->info.BSIZE = info.Sizes.FrameSize;
@@ -239,7 +272,14 @@ int TAK_OpenFile (TAKSTREAM *tak) {
 	GetApeTag(tak);
 	GetID3Tags(tak);
 	tak_SSD_Seek(tak->streamDec,0);
-	return 0;
+	return true;
 }
 
-
+bool TAK_ReadAudio(TAKSTREAM *stream,void* readBuf, long readSamples, int* readedSampleCount){
+	TtakInt32 readed;
+	if((tak_SSD_ReadAudio(stream->streamDec, readBuf, readSamples, &readed) != tak_res_Ok) || (readed <= 0)){
+		return false;
+	}
+	*readedSampleCount = readed;
+	return true;
+}

@@ -1,11 +1,6 @@
 #include <windows.h>
 #include "bass_tak.h"
-#include "ioif.h"
 #include "takfunc.h"
-
-extern TtakStreamIoInterface IOIF;
-
-// BASS_CHANNELINFO type
 
 // bass plugin information
 static const BASS_PLUGINFORM pluginforms[]={
@@ -25,24 +20,6 @@ typedef struct
 #define BASS_CONFIG_TAK_CHANS	0x11001
 
 static DWORD freq=44100, chans=2;
-
-// add-on function table
-static ADDON_FUNCTIONS TAKfuncs={
-	0, // flags
-	TAK_Free,
-	TAK_GetLength,
-	TAK_GetTags,
-	NULL, // let BASS handle file position
-	TAK_GetInfo,
-	TAK_CanSetPosition,
-	TAK_SetPosition,
-	NULL, // let BASS handle the position/looping/syncing (POS & END)
-	NULL, // TAK_SetSync,
-	NULL, // TAK_RemoveSync,
-	NULL, // let BASS decide when to resume a stalled stream
-	NULL, // no custom flags
-	NULL // no attributes
-};
 
 // config function - called by BASS_SetConfig/Ptr and BASS_GetConfig/Ptr
 static BOOL CALLBACK ConfigProc(DWORD option, DWORD flags, void *value)
@@ -66,29 +43,25 @@ static BOOL CALLBACK ConfigProc(DWORD option, DWORD flags, void *value)
 static DWORD CALLBACK StreamProc(HSTREAM handle, BYTE* buffer, DWORD length, TAKSTREAM *stream)
 {
 	DWORD count=0;
-	DWORD offset=0;
-	int readedSampleCount;
-	int readedBytes;
-	int takBytePerSample;
-	int outBytePerSample;
-	BYTE* readBuf;
+	int readedSampleCount, readedBytes;
+	int takBytePerSample, outBytePerSample;
+	BYTE *readBuf, *bufP;
+
 	takBytePerSample = stream->info.BPS/8*stream->info.NCH; // eg 16bit stereo -> 4
 	outBytePerSample = ((stream->flags & BASS_SAMPLE_FLOAT)?4:2)*stream->info.NCH;
+	int readSamples = length/outBytePerSample; // samples required to read.
 
-	int readSamples = length/outBytePerSample;
-	readBuf = (BYTE*)HeapAlloc(GetProcessHeap(),0,readSamples*takBytePerSample);
-	if(tak_SSD_ReadAudio(stream->streamDec , readBuf , readSamples , &readedSampleCount) != tak_res_Ok){
-		free(readBuf);
-		return offset|BASS_STREAMPROC_END;
+	bufP = readBuf = (BYTE*)HeapAlloc(GetProcessHeap(),0,readSamples*takBytePerSample);
+	if(readBuf == NULL)error(BASS_ERROR_MEM);
+
+	if(!TAK_ReadAudio(stream, readBuf, readSamples, &readedSampleCount)){
+		readedBytes = BASS_STREAMPROC_END;
+		goto end;
 	}
-	if(readedSampleCount <= 0){
-		free(readBuf);
-		return offset|BASS_STREAMPROC_END;
-	}
+
 	readedBytes = readedSampleCount*outBytePerSample;
-
 	long elementCnt = readedSampleCount*stream->info.NCH;
-	BYTE* bufP = readBuf;
+
 	if(stream->flags & BASS_SAMPLE_FLOAT){
 		bassfunc->data.Int2Float(bufP,(float*)buffer,elementCnt,stream->info.BPS/8);
 	}else{
@@ -118,41 +91,32 @@ static DWORD CALLBACK StreamProc(HSTREAM handle, BYTE* buffer, DWORD length, TAK
 				break;
 		}
 	}
+end:
 	HeapFree(GetProcessHeap(),0,readBuf);
-	return offset+readedBytes;
+	noerrorn(readedBytes);
 }
 
 HSTREAM WINAPI StreamCreateProc(BASSFILE file, DWORD flags){
-
-	TtakSSDOptions Options;
-	Options.Cpu = tak_Cpu_Any;
-	Options.Flags = 0;
 	if (bassfunc->file.GetFlags(file)&BASSFILE_BUFFERED) error(BASS_ERROR_FILEFORM);
 
-	TAKSTREAM *stream=(TAKSTREAM*)HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(TAKSTREAM));
-
+	TAKSTREAM *stream = (TAKSTREAM*)HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(TAKSTREAM));
+	if(stream == NULL){ goto failed; }
 	stream->f = file;
 	
-	stream->streamDec = tak_SSD_Create_FromStream(&IOIF,stream,&Options,Tak_Damaged,stream);
-	if(stream->streamDec == NULL){
-		return 0;
-	}
-	if (TAK_OpenFile(stream) != 0 ) {
-		TAK_Free(stream);
-		error(BASS_ERROR_FILEFORM);
-	}
+	if(!TAK_OpenFile(stream)) { goto failed; }
 
 	// restrict flags to valid ones, and create the BASS stream
 	flags&=BASS_SAMPLE_FLOAT|BASS_SAMPLE_SOFTWARE|BASS_SAMPLE_LOOP|BASS_SAMPLE_3D|BASS_SAMPLE_FX
 		|BASS_STREAM_DECODE|BASS_STREAM_AUTOFREE
 		|0x3f000000; // 0x3f000000 = all speaker flags
-	if (!(stream->handle=bassfunc->CreateStream((DWORD)stream->info.SAMPLERATE,stream->info.NCH,flags,(STREAMPROC*)&StreamProc,stream,&TAKfuncs))) {
-		TAK_Free(stream);
-		return 0;
-	}
+	if (!(stream->handle=bassfunc->CreateStream((DWORD)stream->info.SAMPLERATE,stream->info.NCH,flags,(STREAMPROC*)&StreamProc,stream,&TAKfuncs))){ goto failed; }
 	stream->flags=flags;
 	bassfunc->file.SetStream(file,stream->handle); // set the stream associated with the file
 	noerrorn(stream->handle);
+
+failed:
+	TAKfuncs.Free(stream);// TAK_Free(stream);
+	error(BASS_ERROR_FILEFORM);
 }
 
 HSTREAM WINAPI BASS_TAK_StreamCreateFile(BOOL mem, const void *file, DWORD offset, DWORD length, DWORD flags)
@@ -215,7 +179,7 @@ BOOL WINAPI DllMain( HINSTANCE hinstDLL,DWORD fdwReason,LPVOID lpvReserved){
 		case DLL_PROCESS_ATTACH: //initialize
 			DisableThreadLibraryCalls(hinstDLL);
 			if (HIWORD(BASS_GetVersion())!=BASSVERSION) {
-				MessageBoxA(0,"Incorrect BASS.DLL version ("BASSVERSIONTEXT" is required)","BASS_RAW",MB_ICONERROR);
+				MessageBoxA(0,"Incorrect BASS.DLL version ("BASSVERSIONTEXT" is required)","BASS_TAK",MB_ICONERROR);
 				return FALSE;
 			}
 			bassfunc->RegisterPlugin(ConfigProc,PLUGIN_CONFIG_ADD); // register config function for freq/chans options
