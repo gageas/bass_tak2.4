@@ -1,10 +1,12 @@
-Require
+Requirement
 
-src/bass-addon.h
-src/bass.h
-src/bass.lib
-src/tak_deco_lib.h
-src/tak_deco_lib.lib
+	Develop:
+		src/bass-addon.h
+			To get this file, you should contact un4seen developer by email. see here http://www.un4seen.com/
+		src/bass.h
+		src/bass.lib
+		src/tak_deco_lib.h
+		src/tak_deco_lib.lib
 
-And
-tak_deco_lib.dll
+	Runtime:
+		tak_deco_lib.dll
