@@ -4,17 +4,21 @@
 
 #define INIT TAKSTREAM* current_stream = (TAKSTREAM*)AUser;
 #define INIT_AND_CHECK INIT; if(!current_stream){return tak_False;};
-TtakBool always_false(void * AUser){return tak_False;}
 typedef TtakBool(*BoolVoid_Callback)(void*);
+
 
 // TAK IO functions
 TtakBool CanRead(void * AUser){
 	INIT_AND_CHECK;
-	return true;
+	return tak_True;
 }
 
-BoolVoid_Callback CanSeek = CanRead;
+TtakBool CanSeek(void * AUser){
+	INIT_AND_CHECK;
+	return tak_True;
+}
 
+TtakBool always_false(void * AUser){return tak_False;}
 BoolVoid_Callback CanWrite = always_false;
 BoolVoid_Callback Flush = always_false;
 BoolVoid_Callback Truncate = always_false;
