@@ -51,7 +51,12 @@ static DWORD CALLBACK StreamProc(HSTREAM handle, BYTE* buffer, DWORD length, TAK
 	outBytePerSample = ((stream->flags & BASS_SAMPLE_FLOAT)?4:2)*stream->info.NCH;
 	int readSamples = length/outBytePerSample; // samples required to read.
 
-	bufP = readBuf = (BYTE*)HeapAlloc(GetProcessHeap(),0,readSamples*takBytePerSample);
+	if(stream->szWorkBufLen < readSamples*takBytePerSample){
+		stream->lpWorkBuf = (BYTE*)HeapReAlloc(GetProcessHeap(), 0, stream->lpWorkBuf, readSamples * takBytePerSample);
+		stream->szWorkBufLen = readSamples * takBytePerSample;
+	}
+
+	bufP = readBuf = stream->lpWorkBuf;
 	if(readBuf == NULL)error(BASS_ERROR_MEM);
 
 	if(!TAK_ReadAudio(stream, readBuf, readSamples, &readedSampleCount)){
@@ -92,7 +97,6 @@ static DWORD CALLBACK StreamProc(HSTREAM handle, BYTE* buffer, DWORD length, TAK
 		}
 	}
 end:
-	HeapFree(GetProcessHeap(),0,readBuf);
 	noerrorn(readedBytes);
 }
 

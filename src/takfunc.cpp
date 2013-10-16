@@ -221,6 +221,7 @@ QWORD WINAPI TAK_SetPosition(void *inst, QWORD pos, DWORD mode)
 static void FreeTAK(TAKSTREAM* tak){
 	if(tak){
 		tak_SSD_Destroy(tak->streamDec);
+		HeapFree(GetProcessHeap(),0,tak->lpWorkBuf);
 		HeapFree(GetProcessHeap(),0,tak->info.APETAG);
 		HeapFree(GetProcessHeap(),0,tak->info.ID3V2);
 		HeapFree(GetProcessHeap(),0,tak);

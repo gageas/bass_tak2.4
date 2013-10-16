@@ -38,4 +38,6 @@ typedef struct
 	BASSFILE f;
 	DWORD flags;
 	INFO info;
+	BYTE* lpWorkBuf;
+	DWORD szWorkBufLen;
 } TAKSTREAM;
