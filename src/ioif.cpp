@@ -1,52 +1,58 @@
-#include "bass_tak.h"
+
+// interface wrapper of BASSFILE for tak_deco_lib
+
+#include "bass-addon.h"
 #include "tak_deco_lib.h"
 #include "ioif.h"
 
-#define INIT TAKSTREAM* current_stream = (TAKSTREAM*)AUser;
-#define INIT_AND_CHECK INIT; if(!current_stream){return tak_False;};
 typedef TtakBool(*BoolVoid_Callback)(void*);
 
-
 // TAK IO functions
-TtakBool CanRead(void * AUser){
-	INIT_AND_CHECK;
+TtakBool CanRead(BASSFILE bassFile)
+{
 	return tak_True;
 }
 
-TtakBool CanSeek(void * AUser){
-	INIT_AND_CHECK;
+TtakBool CanSeek(BASSFILE bassFile)
+{
 	return tak_True;
 }
 
-TtakBool always_false(void * AUser){return tak_False;}
+TtakBool Read(BASSFILE bassFile, void *ABuf, TtakInt32 ANum, TtakInt32 *AReadNum )
+{
+	*AReadNum = bassfunc->file.Read(bassFile, ABuf, ANum);
+	if (AReadNum > 0) return tak_True;
+	return tak_False;
+}
+
+TtakBool Write(BASSFILE bassFile, const void *ABuf, TtakInt32 ANum)
+{
+	return tak_False;
+}
+
+TtakBool Seek(BASSFILE bassFile, TtakInt64 APos)
+{
+	bassfunc->file.Seek(bassFile, (DWORD)APos);
+	return tak_True;
+}
+
+TtakBool GetLength(BASSFILE bassFile, TtakInt64 *ALength)
+{
+	*ALength = bassfunc->file.GetPos(bassFile, BASS_FILEPOS_END);
+	return tak_True;
+}
+
+TtakBool always_false(BASSFILE bassFile)
+{
+	return tak_False;
+}
+
 BoolVoid_Callback CanWrite = always_false;
 BoolVoid_Callback Flush = always_false;
 BoolVoid_Callback Truncate = always_false;
 
-TtakBool Read(void * AUser, void *      ABuf, TtakInt32   ANum, TtakInt32 * AReadNum ){
-	INIT_AND_CHECK;
-	*AReadNum = bassfunc->file.Read(current_stream->f,ABuf,ANum);
-	if(AReadNum>0)return tak_True;
-	return tak_False;
-}
-
-TtakBool Write(void * AUser,const void * ABuf,TtakInt32 ANum){
-	return tak_False;
-}
-
-TtakBool Seek(void * AUser, TtakInt64 APos){
-	INIT_AND_CHECK;
-	bassfunc->file.Seek(current_stream->f,(DWORD)APos);
-	return tak_True;
-}
-
-TtakBool GetLength(void * AUser,TtakInt64 * ALength){
-	INIT_AND_CHECK;
-	*ALength = bassfunc->file.GetPos(current_stream->f,BASS_FILEPOS_END);
-	return tak_True;
-}
-
-TtakStreamIoInterface IOIF = {
+TtakStreamIoInterface IOIF = 
+{
 	CanRead,
 	CanWrite,
 	CanSeek,

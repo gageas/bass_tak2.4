@@ -1,7 +1,7 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual C++ Express 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bass_tak", "src\bass_tak.vcproj", "{A5C4C3AA-3ED4-4125-BF7E-51BC6556FEE9}"
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bass_tak2.4", "src\bass_tak.vcxproj", "{A5C4C3AA-3ED4-4125-BF7E-51BC6556FEE9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
