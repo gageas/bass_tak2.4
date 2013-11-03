@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ape.h"
 #include "bass-addon.h"
 #include "tak_deco_lib.h"
 
@@ -11,6 +12,26 @@
 #define error(n) return (bassfunc->SetError(n),FALSE) // error = 0/NULL
 #define errorn(n) return (bassfunc->SetError(n),-1) // error = -1
 #define errorcp(n) return (char*)(bassfunc->SetError(n),NULL)
+
+typedef struct {
+	const char *asApeTag;
+	const char *id3_24frameKey;
+	const int charCode;
+	const char *id3_24valuePrefix;
+	const int id3_24valuePrefixLen;
+	const int id3_1_pos;
+	const int id3_1_len;
+} ID3TAGTEMPLETE;
+
+static const ID3TAGTEMPLETE gWellKnownID3Tags[] = {
+	//    APE               ID3v2   CC  Prefix len  ID3v1 len
+	{APE_TAG_FIELD_TITLE,   "TIT2", 3,  NULL,    0,   3,   30},
+	{APE_TAG_FIELD_ARTIST,  "TPE1", 3,  NULL,    0,  33,   30},
+	{APE_TAG_FIELD_ALBUM,   "TALB", 3,  NULL,    0,  63,   30},
+	{APE_TAG_FIELD_YEAR,    "TDRC", 0,  NULL,    0,  93,    4},
+	{APE_TAG_FIELD_COMMENT, "COMM", 3,  "ENG\0", 4,  97,   28},
+	{APE_TAG_FIELD_TRACK,   "TRCK", 0,  NULL,    0, 126,    0}, /* need special process for this tag(ID3V1) */
+};
 
 class TakStream
 {

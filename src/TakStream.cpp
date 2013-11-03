@@ -2,28 +2,7 @@
 #include "TakStream.h"
 #pragma comment(lib,"tak_deco_lib.lib")
 #include "ioif.h"
-#include "ape.h"
 #include "takfunc.h"
-
-typedef struct {
-	const char *asApeTag;
-	const char *id3_24frameKey;
-	const int charCode;
-	const char *id3_24valuePrefix;
-	const int id3_24valuePrefixLen;
-	const int id3_1_pos;
-	const int id3_1_len;
-} ID3TAGTEMPLETE;
-
-static const ID3TAGTEMPLETE gWellKnownID3Tags[] = {
-	//    APE               ID3v2   CC  Prefix len  ID3v1 len
-	{APE_TAG_FIELD_TITLE,   "TIT2", 3,  NULL,    0,   3,   30},
-	{APE_TAG_FIELD_ARTIST,  "TPE1", 3,  NULL,    0,  33,   30},
-	{APE_TAG_FIELD_ALBUM,   "TALB", 3,  NULL,    0,  63,   30},
-	{APE_TAG_FIELD_YEAR,    "TDRC", 0,  NULL,    0,  93,    4},
-	{APE_TAG_FIELD_COMMENT, "COMM", 3,  "ENG\0", 4,  97,   28},
-	{APE_TAG_FIELD_TRACK,   "TRCK", 0,  NULL,    0, 126,    0}, /* need special process for this tag(ID3V1) */
-};
 
 TakStream::TakStream(DWORD flags){
 	m_flags = flags;
@@ -169,72 +148,66 @@ int setID3V24Frame(BYTE* buf, int charcode, const char* frameId, const BYTE*pref
 
 #define TAG_VALUE_SIZE 1024
 void TakStream::extractID3Tags(){
-	TtakAPEv2Tag tag;
-	int i = 0; // loop counter 
-	int len = 0; // tags count
 	char key[64]; // tagName(key)
-	BYTE* value; // value as UTF8
-	char* valueAnsi; // value as Ansi
 	int readed; // readed bytes of UTF8 value
 	int readedAnsi; // readed bytes of Ansi value
 	int tagsize = 0; // current V2 tag size
 
-	tag = tak_SSD_GetAPEv2Tag(m_takDecoder);
-	if(tak_APE_Valid(tag) != tak_True) {
-		return;
-	}
+	TtakAPEv2Tag tag = tak_SSD_GetAPEv2Tag(m_takDecoder);
+	if(tak_APE_Valid(tag) != tak_True) return;
 
-	len = tak_APE_GetItemNum(tag);
+	int len = tak_APE_GetItemNum(tag);
 
 	// init V1 Tag
-	memcpy_s(m_id3v1Tag,3,"TAG",3);
+	memcpy_s(m_id3v1Tag, 3, "TAG", 3);
 
 	tagsize = 10; // initial v2.4 tag size
-	m_id3v2Tag = (BYTE*)HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,tagsize); //calloc(1,10); // init V2.4 Tag
+	m_id3v2Tag = (BYTE*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, tagsize); //calloc(1,10); // init V2.4 Tag
 	if (m_id3v2Tag == NULL) goto end;
 
-	value = (BYTE*)HeapAlloc(GetProcessHeap(),0,TAG_VALUE_SIZE);
+	BYTE* value = (BYTE*)HeapAlloc(GetProcessHeap(), 0, TAG_VALUE_SIZE);
 	if (value == NULL) goto end;
 
-	valueAnsi = (char*)HeapAlloc(GetProcessHeap(),0,TAG_VALUE_SIZE);
+	char* valueAnsi = (char*)HeapAlloc(GetProcessHeap(), 0, TAG_VALUE_SIZE);
 	if (valueAnsi == NULL) goto end;
 
-	memcpy_s(m_id3v2Tag,3,"ID3",3);
+	memcpy_s(m_id3v2Tag, 3, "ID3", 3);
 	m_id3v2Tag[3] = 0x04; //Version
-	for(i=0; i<len; i++){
-		if (tak_APE_GetItemKey(tag,i,key,64,&readed) != tak_res_Ok) continue;
+	for(int i=0; i<len; i++){
+		if (tak_APE_GetItemKey(tag, i, key, sizeof(key), &readed) != tak_res_Ok) continue;
 
-		if (tak_APE_GetItemValue(tag,i,NULL,0,&readed) != tak_res_Ok) continue; // get Bytes
+		const ID3TAGTEMPLETE *tmpl = NULL;
+		for (int j=0; j < sizeof(gWellKnownID3Tags) / sizeof(gWellKnownID3Tags[0]); j++) {
+			if (strcmp(key, gWellKnownID3Tags[j].asApeTag) != 0) continue;
+			tmpl = &(gWellKnownID3Tags[j]);
+			break;
+		}
+		if (tmpl == NULL) continue;
+		if (tak_APE_GetItemValue(tag, i, NULL, 0, &readed) != tak_res_Ok) continue; // get Bytes
 		if (readed > TAG_VALUE_SIZE){
-			value = (BYTE*)HeapReAlloc(GetProcessHeap(),0,value,readed);
-			if (value == NULL) break;
+			value = (BYTE*)HeapReAlloc(GetProcessHeap(), 0, value, readed);
+			if (value == NULL) goto end;
 		}
-		if (tak_APE_GetItemValue(tag,i,value,readed,&readed) != tak_res_Ok) continue;
+		if (tak_APE_GetItemValue(tag, i, value, readed, &readed) != tak_res_Ok) continue;
 
-		if (tak_APE_GetTextItemValueAsAnsi(tag,i,-1,' ',NULL,0,&readedAnsi) != tak_res_Ok) continue; // get bytes
+		if (tak_APE_GetTextItemValueAsAnsi(tag, i, -1, ' ', NULL, 0, &readedAnsi) != tak_res_Ok) continue; // get bytes
 		if(readedAnsi > TAG_VALUE_SIZE){
-			valueAnsi = (char*)HeapReAlloc(GetProcessHeap(),0,valueAnsi,readedAnsi);
-			if (valueAnsi == NULL) break;
+			valueAnsi = (char*)HeapReAlloc(GetProcessHeap(), 0, valueAnsi, readedAnsi);
+			if (valueAnsi == NULL) goto end;
 		}
-		if (tak_APE_GetTextItemValueAsAnsi(tag,i,-1,' ',valueAnsi,readedAnsi,&readedAnsi) != tak_res_Ok) continue;
+		if (tak_APE_GetTextItemValueAsAnsi(tag, i, -1, ' ', valueAnsi, readedAnsi, &readedAnsi) != tak_res_Ok) continue;
 
-		for (int j=0; j<sizeof(gWellKnownID3Tags)/sizeof(gWellKnownID3Tags[0]); j++) {
-			const ID3TAGTEMPLETE *tmpl = &(gWellKnownID3Tags[j]);
-			if (strcmp(key, tmpl->asApeTag) != 0) continue;
+		// for v2
+		m_id3v2Tag = (BYTE*)HeapReAlloc(GetProcessHeap(), 0, m_id3v2Tag, tagsize + 11 + tmpl->id3_24valuePrefixLen + readed);
+		if (m_id3v2Tag == NULL) goto end;
+		tagsize += setID3V24Frame(m_id3v2Tag + tagsize, tmpl->charCode, tmpl->id3_24frameKey, (BYTE*)tmpl->id3_24valuePrefix, tmpl->id3_24valuePrefixLen, value, readed);
 
-			// for v2
-			m_id3v2Tag = (BYTE*)HeapReAlloc(GetProcessHeap(), 0, m_id3v2Tag, tagsize + 11 + tmpl->id3_24valuePrefixLen + readed);
-			if (m_id3v2Tag == NULL) goto end;
-
-			tagsize += setID3V24Frame(m_id3v2Tag + tagsize, tmpl->charCode, tmpl->id3_24frameKey, (BYTE*)tmpl->id3_24valuePrefix, tmpl->id3_24valuePrefixLen, value, readed);
-
-			// for v1
-			if (strcmp(tmpl->id3_24frameKey, "TRCK") == 0) {
-				// Do special process for TRCK frame
-				m_id3v1Tag[tmpl->id3_1_pos] = atoi(valueAnsi);
-			} else {
-				memcpy(m_id3v1Tag + tmpl->id3_1_pos, valueAnsi, min(readedAnsi, tmpl->id3_1_len));
-			}
+		// for v1
+		if (strcmp(tmpl->id3_24frameKey, "TRCK") == 0) {
+			// Do special process for TRCK frame
+			m_id3v1Tag[tmpl->id3_1_pos] = atoi(valueAnsi);
+		} else {
+			memcpy(m_id3v1Tag + tmpl->id3_1_pos, valueAnsi, min(readedAnsi, tmpl->id3_1_len));
 		}
 	}
 	tagsize -= 10;
