@@ -23,21 +23,24 @@ static BOOL CALLBACK ConfigProc(DWORD option, DWORD flags, void *value)
 
 HSTREAM WINAPI StreamCreateProc(BASSFILE file, DWORD flags){
 	if (bassfunc->file.GetFlags(file) & BASSFILE_BUFFERED) {
-		errorn(BASS_ERROR_FILEFORM);
+		bassfunc->SetError(BASS_ERROR_FILEFORM);
+		return 0;
 	}
 
 	// restrict flags to valid ones, and create the BASS stream
 	flags &= CREATE_PROC_FLAG_MASK;
 
 	TakStream *stream = new TakStream(flags);
-	if (stream == NULL) {
-		errorn(BASS_ERROR_MEM);
+	if (!stream) {
+		bassfunc->SetError(BASS_ERROR_MEM);
+		return 0;
 	}
 	
 	HSTREAM handle = stream->openDecoder(file);
 	if(!handle) {
 		delete stream;
-		errorn(BASS_ERROR_FILEFORM);
+		bassfunc->SetError(BASS_ERROR_FILEFORM);
+		return 0;
 	}
 	noerrorn(handle);
 }
@@ -67,7 +70,9 @@ HSTREAM WINAPI BASS_TAK_StreamCreateURL(const char *url, DWORD offset, DWORD fla
 if (badbass) error(BASS_ERROR_VERSION);
 #endif
 	bfile = bassfunc->file.OpenURL(url, offset, flags, proc, user, FALSE);
-	if (!bfile) return 0; // OpenURL set the error code
+	if (!bfile) {
+		return 0; // OpenURL set the error code
+	}
 	s = StreamCreateProc(bfile, flags);
 	if (!s) bassfunc->file.Close(bfile);
 	return s;
