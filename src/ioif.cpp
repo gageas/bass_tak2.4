@@ -32,8 +32,7 @@ TtakBool Write(BASSFILE bassFile, const void *ABuf, TtakInt32 ANum)
 
 TtakBool Seek(BASSFILE bassFile, TtakInt64 APos)
 {
-	bassfunc->file.Seek(bassFile, (DWORD)APos);
-	return tak_True;
+	return bassfunc->file.Seek(bassFile, (DWORD)APos) ? tak_True : tak_False;
 }
 
 TtakBool GetLength(BASSFILE bassFile, TtakInt64 *ALength)
