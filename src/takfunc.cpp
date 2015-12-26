@@ -68,7 +68,7 @@ QWORD WINAPI TAK_SetPosition(void *inst, QWORD pos, DWORD mode)
 {
 	TakStream* stream=(TakStream*)inst;
 	stream->setPosition(pos);
-	return pos;
+	return stream->getPosition();
 }
 
 void WINAPI TAK_Free(void* inst)
