@@ -56,7 +56,7 @@ QWORD TakStream::getLength()
 
 QWORD TakStream::getPosition()
 {
-	return tak_SSD_GetReadPos(m_takDecoder);
+	return tak_SSD_GetReadPos(m_takDecoder) * getBytesPerSample();
 }
 
 bool TakStream::setPosition(QWORD samplePos)
