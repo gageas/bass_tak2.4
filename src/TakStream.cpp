@@ -254,7 +254,7 @@ inline int TakStream::getBytesPerSample()
 
 DWORD TakStream::streamProcIntl(BYTE* buffer, DWORD length)
 {
-	int decodedSampleNum;
+	long decodedSampleNum;
 
 	try{
 		decodedSampleNum = decode(length / getBytesPerSample());
